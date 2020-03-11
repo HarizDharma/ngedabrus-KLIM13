@@ -1,0 +1,142 @@
+#################################
+##### Install Node Exporter #####
+#################################
+
+
+##1. Download Paket Node Exporter
+cd /opt
+wget https://github.com/prometheus/node_exporter/releases/download/v0.16.0/node_exporter-0.16.0.linux-amd64.tar.gz
+tar xvfz node_exporter-0.16.0.linux-amd64.tar.gz
+
+##2. Start Node Exporter
+cd node_exporter-0.16.0.linux-amd64
+./node_exporter --help
+./node_exporter --version
+./node_exporter
+
+##3. Gunakan browser dan akses metrics:
+#- http://floating-ip-podX-node0:9100/metrics
+
+##4. Running Node Exporter as a Service
+vi /etc/systemd/system/node_exporter.service
+
+[Unit]
+Description=Node Exporter
+
+[Service]
+User=root
+ExecStart=/opt/node_exporter-0.16.0.linux-amd64/node_exporter
+
+[Install]
+WantedBy=default.target
+
+
+##5. Start Node Exporter Service
+systemctl daemon-reload
+systemctl enable node_exporter.service
+systemctl start node_exporter.service
+systemctl status node_exporter.service
+journalctl -u node_exporter
+
+##### Install Prometheus Server #####
+##6. Download Paket Prometheus Server
+cd /opt
+wget https://github.com/prometheus/prometheus/releases/download/v2.4.0/prometheus-2.4.0.linux-amd64.tar.gz
+tar xvfz prometheus-2.4.0.linux-amd64.tar.gz
+
+##7. Konfigurasi Prometheus Server
+cd prometheus-2.4.0.linux-amd64
+vi config.yml
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus-server'
+    static_configs:
+    - targets: ['10.X.X.10:9090']
+  - job_name: 'node-exporter'
+    static_configs:
+    - targets: ['10.X.X.10:9100','10.X.X.20:9100']
+
+##8. Start Prometheus Server
+./promtool check config config.yml
+./prometheus --help
+./prometheus --version
+./prometheus --config.file=/opt/prometheus-2.4.0.linux-amd64/config.yml
+
+##9. Gunakan browser dan akses url berikut:
+#- Metrics: http://floating-ip-podX-node0:9090/metrics
+#- Graph: http://floating-ip-podX-node0:9090/
+#- Target: http://floating-ip-podX-node0:9090/targets
+
+##10. Running Prometheus Server as a Service
+vi /etc/systemd/system/prometheus_server.service
+
+[Unit]
+Description=Prometheus Server
+
+[Service]
+User=root
+ExecStart=/opt/prometheus-2.4.0.linux-amd64/prometheus --config.file=/opt/prometheus-2.4.0.linux-amd64/config.yml --web.external-url=http://floating-ip:9090/
+
+[Install]
+WantedBy=default.target
+
+##6. Start Prometheus Server Service
+systemctl daemon-reload
+systemctl enable prometheus_server.service
+systemctl start prometheus_server.service
+systemctl status prometheus_server.service
+journalctl -u prometheus_server
+
+##### Install Grafana #####
+##11. Download Paket Grafana
+cd /opt
+wget https://s3-us-west-2.amazonaws.com/grafana-releases/release/grafana-5.2.4.linux-amd64.tar.gz
+tar zxvf grafana-5.2.4.linux-amd64.tar.gz
+
+##12. Start Grafana
+cd grafana-5.2.4
+screen -R grafana
+./bin/grafana-server web
+
+##13. Gunakan browser dan akses http://floating-ip:3000/login:
+##14. Running Grafana as a service
+vi /etc/systemd/system/grafana.service
+
+[Unit]
+Description=Grafana
+
+[Service]
+User=root
+ExecStart=/opt/grafana-5.2.4/bin/grafana-server -homepath /opt/grafana-5.2.4/ web
+
+[Install]
+WantedBy=default.target
+
+##15. Start Grafana Service
+systemctl daemon-reload
+systemctl enable grafana.service
+systemctl start grafana.service
+systemctl status grafana.service
+journalctl -u grafana
+
+##16. Menambahkan Data Source
+#- Gunakan browser dan akses Dashboard Grafana: http://floating:3000/login
+#- Configuration > Data Sources > Add data source
+#- Name: Prometheus-[username]
+#- Type: Prometheus
+#- URL: http://floating-ip-podX-node0:9090
+#- Save & Test
+#- Pastikan mendapat pesan: Data source is working
+
+##17. Buat Panel: Status
+#- Create > Dashboard > Add > SingleStat
+#- Klik Panel Title > Edit
+#- Tab General > Title: Status
+#- Tab Metrics > Data Sources: Prometheus-[username], Metrics: up{instance="10.X.X.x:9100",job="node-exporter"}
+#- Tab Options > Stat: Current
+#- Tab Value Mappings > Set value mappings: 1 -> Up, 0 -> Down
+#- Save Dashboard > New name: node0
